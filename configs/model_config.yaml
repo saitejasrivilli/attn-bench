@@ -1,0 +1,34 @@
+# configs/model_config.yaml
+# All values here drive actual benchmark runs — nothing is hardcoded in Python
+
+model:
+  name: "mistralai/Mistral-7B-Instruct-v0.2"
+  weights_dir: "./weights/mistral-7b"
+  dtype: "float16"                   # fp16 on A30 (no bf16 native support)
+  tensor_parallel_size: 2            # 2 GPUs per engine instance
+  max_model_len: 4096
+
+hardware:
+  gpus: 4
+  gpu_model: "NVIDIA A30"
+  vram_per_gpu_gb: 24
+  cuda_version: "12.1"
+
+attention:
+  num_heads: 32
+  num_kv_heads: 8                    # Mistral-7B uses GQA
+  head_dim: 128
+  seq_lengths: [512, 1024, 2048, 4096]
+
+vllm:
+  host: "127.0.0.1"
+  port: 8000
+  gpu_memory_utilization: 0.90
+  max_num_seqs: 256
+  swap_space_gb: 4
+
+sglang:
+  host: "127.0.0.1"
+  port: 30000
+  mem_fraction_static: 0.88
+  max_prefill_tokens: 8192

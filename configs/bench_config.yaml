@@ -1,0 +1,35 @@
+# configs/bench_config.yaml
+
+benchmark:
+  concurrency_levels: [1, 4, 16, 32]
+  num_requests_per_level: 200        # total requests per concurrency level
+  warmup_requests: 20                # discarded before measurement
+  prompt_tokens: 512                 # input tokens (ShareGPT-style)
+  output_tokens: 256                 # max new tokens per request
+  request_timeout_s: 120
+
+  # Shared prompt dataset — sampled from ShareGPT to avoid synthetic inputs
+  dataset: "sharegpt"
+  dataset_path: "./data/ShareGPT_V3_unfiltered_cleaned_split.json"
+  dataset_sample_size: 1000
+
+profiling:
+  enabled: true
+  torch_profiler_wait: 2             # steps to skip
+  torch_profiler_warmup: 3
+  torch_profiler_active: 5
+  profile_output_dir: "./results/profiles"
+
+kernel_bench:
+  # Standalone kernel benchmark (no engine, raw kernel timing)
+  batch_sizes: [1, 4, 8, 16, 32]
+  seq_lengths: [512, 1024, 2048, 4096]
+  warmup_iters: 50
+  bench_iters: 200
+  use_cuda_events: true              # high-resolution CUDA timing
+
+autotuning:
+  backend: "inductor"                # "inductor" | "tvm" 
+  tvm_trials: 2000
+  save_tuning_cache: true
+  cache_path: "./results/tvm_cache.json"
