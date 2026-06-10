@@ -78,91 +78,47 @@ Metrics: TTFT (ms), throughput (tok/s), P50/P95/P99 latency, GPU SM utilization
 
 ---
 
-## PagedAttention Analysis
+## Measured Results — NVIDIA A30 × 4, Mistral-7B-Instruct-v0.2
 
-`analysis/paged_attention_analysis.py` simulates a serving workload with
-variable-length requests (log-normal distribution, mean ~512 tokens) and
-compares naive KV cache allocation against PagedAttention-style paged
-allocation.
+All vLLM benchmarks run with vLLM 0.17.1, PyTorch 2.10.0+cu128, CUDA 12.8.
+Raw JSON in `results/`.  Run script: `python run_real_benchmarks.py`
 
-```bash
-python analysis/paged_attention_analysis.py \
-    --n_requests 1000 --max_seq_len 2048 --page_size 16
-```
+### KV Cache: Naive Pre-allocation vs PagedAttention
 
-Example output:
+Modeled with Mistral-7B parameters (32 layers, 32 heads, head_dim=128, fp16).
+1000 requests, log-normal sequence lengths (mean=523 tokens), page_size=16.
 
-```
-=== KV Cache Analysis (1000 requests, max_len=2048) ===
- Mean request length:   512.4 tokens
- Naive allocation:  avg fragmentation  43.2%,  peak 18.4 GB
- Paged allocation:  avg fragmentation   2.1%,  peak  9.8 GB
- Memory savings:    46.7%
-```
+| Method | KV cache allocation | Fragmentation | Concurrent capacity (1 A30) |
+|--------|-------------------|---------------|----------------------------|
+| Naive pre-alloc | 1000 GB (total) | **74.4%** | 15 requests |
+| PagedAttention | 259 GB (total) | **1.4%** | 58 requests |
 
-The plot saved to `results/paged_attention_analysis.png` shows fragmentation
-per batch, allocated memory over time, the request-length histogram, and a
-summary bar chart.
-
-**Why it matters:** Naive pre-allocation wastes ~43% of KV cache memory
-because each slot is sized for `max_seq_len` regardless of actual length.
-PagedAttention allocates 16-token pages on demand, reducing peak memory by
-~47% and allowing the GPU to serve nearly 2x more concurrent requests.
+**74.1% memory savings, 3.9× more concurrent requests per GPU.**
+Naive pre-allocation wastes 74% of KV cache because every slot is sized for
+`max_seq_len=2048` regardless of actual request length. PagedAttention
+allocates 16-token pages on demand, enabling nearly 4× the concurrency on
+the same hardware.
 
 ---
 
-## Continuous Batching
+### Continuous Batching vs Static Batching
 
-`benchmark/continuous_batching.py` compares static batching (transformers)
-against continuous batching (vLLM) on Qwen2.5-7B-Instruct.
+Mistral-7B, single A30 (24 GB), 40 prompts, 200 output tokens each.
+vLLM 0.17.1 with chunked prefill enabled.
 
-```bash
-# Static batching only (no vLLM required)
-python benchmark/continuous_batching.py --static_only --n_prompts 50
+| Method | Throughput | TTFT | P50 lat | P99 lat |
+|--------|-----------|------|---------|---------|
+| Static batching (B=4) | 202.8 tok/s | — | — | 3947 ms |
+| **Continuous (vLLM)** | **967.8 tok/s** | **26.5 ms** | 3908 ms | 3918 ms |
 
-# Full comparison (requires vLLM)
-python benchmark/continuous_batching.py \
-    --model Qwen/Qwen2.5-7B-Instruct --n_prompts 100
-```
-
-Example results:
-
-| Method               | Batch | Throughput   | P50 lat | P99 lat |
-|----------------------|-------|-------------|---------|---------|
-| Static batching      |     1 |   45 tok/s  |  180 ms |  230 ms |
-| Static batching      |     4 |   98 tok/s  |  310 ms |  480 ms |
-| Static batching      |     8 |  180 tok/s  |  420 ms |  680 ms |
-| Static batching      |    16 |  240 tok/s  |  760 ms | 1240 ms |
-| Static batching      |    32 |  270 tok/s  | 1420 ms | 2100 ms |
-| Continuous (vLLM)    |   dyn |  340 tok/s  |  160 ms |  290 ms |
-
-Continuous batching achieves 1.9x higher throughput than the best static
-batch size while reducing P99 latency by 86% — new requests fill freed slots
-immediately rather than waiting for the slowest sequence in a batch.
+**4.77× throughput gain** (203 → 968 tok/s). Continuous batching fills freed
+slots immediately as requests complete — GPU utilization stays high across
+the full burst rather than idling at batch boundaries.
 
 ---
 
-## Multi-GPU Tensor-Parallel Serving
+### Tensor-Parallel Scaling (results pending)
 
-`benchmark/multi_gpu_serving.py` measures how throughput and TTFT scale
-across 1-, 2-, and 4-GPU tensor-parallel configurations on 4×A30 (PCIe).
-
-```bash
-python benchmark/multi_gpu_serving.py \
-    --model Qwen/Qwen2.5-7B-Instruct \
-    --tp_sizes 1 2 4 \
-    --n_requests 50 --max_tokens 256
-```
-
-Example results:
-
-| TP Size | TTFT (ms) | Throughput  | Mem/GPU | Speedup |
-|---------|-----------|-------------|---------|---------|
-| 1       |    145 ms |   95 tok/s  | 22.1 GB |   1.00x |
-| 2       |     82 ms |  168 tok/s  | 12.4 GB |   1.77x |
-| 4       |     54 ms |  298 tok/s  |  7.1 GB |   3.14x |
-
-PCIe bandwidth (~16 GB/s inter-GPU) limits scaling efficiency compared to
-NVLink (~600 GB/s). At TP=4 the 4-GPU speedup is 3.14x rather than the
-theoretical 4x, with the gap attributable to all-reduce communication
-overhead at each transformer layer.
+`benchmark/multi_gpu_serving.py` benchmarks TP=1/2/3 on 4×A30 (PCIe, ~16 GB/s inter-GPU).
+Results will be updated in `results/tensor_parallel.json` once the multi-GPU
+NCCL benchmark completes on the shared cluster.

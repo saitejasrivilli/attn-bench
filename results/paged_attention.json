@@ -1,0 +1,12 @@
+{
+  "n_requests": 1000,
+  "mean_seq_len": 523,
+  "naive_kv_cache_gb": 1000.0,
+  "paged_kv_cache_gb": 259.38,
+  "memory_savings_pct": 74.1,
+  "naive_fragmentation_pct": 74.4,
+  "paged_fragmentation_pct": 1.4,
+  "naive_concurrent_capacity": 15,
+  "paged_concurrent_capacity": 58,
+  "capacity_multiplier": 3.87
+}
