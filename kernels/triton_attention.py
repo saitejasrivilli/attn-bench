@@ -42,8 +42,9 @@ def _attn_fwd_kernel(
     Each program handles one BLOCK_M × N_CTX tile for one (batch, head).
     """
     # ── program ids ───────────────────────────────────────────────────────────
-    start_m  = tl.program_id(0)
-    off_bh   = tl.program_id(1)
+    # grid = (batch * num_heads, cdiv(seq_len, BLOCK_M))
+    off_bh   = tl.program_id(0)
+    start_m  = tl.program_id(1)
     off_b    = off_bh // H
     off_h    = off_bh  % H
 
@@ -98,16 +99,24 @@ def _attn_fwd_kernel(
             mask = offs_m[:, None] >= offs_n_curr[None, :]
             qk = tl.where(mask, qk, float("-inf"))
 
-        # online softmax update
-        m_ij = tl.max(qk, axis=1)
-        p    = tl.exp(qk - m_ij[:, None])
-        l_ij = tl.sum(p, axis=1)
+        # online softmax update — FA2 Algorithm 1 (Dao 2023)
+        m_ij   = tl.max(qk, axis=1)
+        m_new  = tl.maximum(m_i, m_ij)
 
-        # rescale accumulator
-        alpha = tl.exp(m_i - tl.maximum(m_i, m_ij))
-        m_i   = tl.maximum(m_i, m_ij)
-        l_i   = l_i * alpha + l_ij
-        acc   = acc * alpha[:, None]
+        # p must be normalised by m_new (global max), NOT m_ij (tile max).
+        # Using m_ij here misses the exp(m_ij - m_new) beta factor and produces
+        # wrong cross-tile accumulation when the old max > the current tile max.
+        # Guard: qk=-inf gives qk-m_new=-inf (or nan when m_new=-inf too);
+        # clamp to -100 so exp ≈ 0 safely.
+        p      = tl.exp(tl.maximum(qk - m_new[:, None], -100.0))
+        l_ij   = tl.sum(p, axis=1)
+
+        # alpha rescales the old accumulator to the new global max.
+        # Guard: m_i=-inf on first iteration → alpha should be 0 (acc is 0 anyway).
+        alpha  = tl.exp(tl.maximum(m_i - m_new, -100.0))
+        m_i    = m_new
+        l_i    = l_i * alpha + l_ij
+        acc    = acc * alpha[:, None]
 
         # load V block
         v = tl.load(

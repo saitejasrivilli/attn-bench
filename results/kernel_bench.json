@@ -1,0 +1,42 @@
+{
+  "512": {
+    "pass_": "PASS",
+    "nan": false,
+    "max_err": 0.00098,
+    "triton_ms": 0.3,
+    "sdpa_ms": 0.096,
+    "triton_tflops": 28.63,
+    "sdpa_tflops": 89.24,
+    "ratio": 3.1
+  },
+  "1024": {
+    "pass_": "PASS",
+    "nan": false,
+    "max_err": 0.00098,
+    "triton_ms": 0.935,
+    "sdpa_ms": 0.241,
+    "triton_tflops": 36.75,
+    "sdpa_tflops": 142.78,
+    "ratio": 3.9
+  },
+  "2048": {
+    "pass_": "PASS",
+    "nan": false,
+    "max_err": 0.00098,
+    "triton_ms": 5.77,
+    "sdpa_ms": 0.796,
+    "triton_tflops": 23.82,
+    "sdpa_tflops": 172.74,
+    "ratio": 7.3
+  },
+  "4096": {
+    "pass_": "PASS",
+    "nan": false,
+    "max_err": 0.00195,
+    "triton_ms": 24.756,
+    "sdpa_ms": 5.442,
+    "triton_tflops": 22.21,
+    "sdpa_tflops": 101.03,
+    "ratio": 4.5
+  }
+}
