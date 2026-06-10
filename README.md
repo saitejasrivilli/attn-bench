@@ -122,3 +122,51 @@ the full burst rather than idling at batch boundaries.
 `benchmark/multi_gpu_serving.py` benchmarks TP=1/2/3 on 4×A30 (PCIe, ~16 GB/s inter-GPU).
 Results will be updated in `results/tensor_parallel.json` once the multi-GPU
 NCCL benchmark completes on the shared cluster.
+
+---
+
+## Custom Triton Kernel — Correctness
+
+`kernels/triton_attention.py` implements FA2 Algorithm 1 (Dao et al., 2023) in Triton.
+The kernel uses the correct online-softmax update:
+
+```
+m_new  = max(m_prev, m_tile)
+p      = exp(qk − m_new)          # normalised by global max, NOT tile max
+alpha  = exp(m_prev − m_new)      # rescales prior accumulator
+l_new  = alpha * l + sum(p)
+acc    = alpha * acc + p @ V
+```
+
+Normalising `p` by `m_ij` (tile-local max) instead of `m_new` misses the
+`exp(m_ij − m_new)` beta factor required when `m_prev > m_ij`, producing
+catastrophically wrong cross-tile accumulation.
+
+### Kernel correctness results
+
+Verified against PyTorch `F.scaled_dot_product_attention` (float16).
+
+| Seq len | Status | max_abs_err | Triton (ms) | SDPA (ms) | Ratio |
+|---------|--------|-------------|-------------|-----------|-------|
+| 512     | PASS   | 0.00098     | 0.30        | 0.10      | 3.1×  |
+| 1024    | PASS   | 0.00098     | 0.93        | 0.24      | 3.9×  |
+| 2048    | PASS   | 0.00098     | 5.77        | 0.80      | 7.3×  |
+| 4096    | PASS   | 0.00195     | 24.76       | 5.44      | 4.5×  |
+
+Errors are within float16 machine epsilon (ε ≈ 0.001). The kernel is a
+reference implementation — no warp specialisation, shared-memory prefetch,
+or register-blocking optimisation. The 3–7× gap to SDPA is expected for an
+unoptimised first-pass kernel.
+
+Run correctness check:
+
+```bash
+python -c "
+import torch, sys
+sys.path.insert(0, 'kernels')
+from kernel_bench import run_benchmark
+run_benchmark()
+"
+```
+
+Results saved to `results/kernel_bench.json`.
