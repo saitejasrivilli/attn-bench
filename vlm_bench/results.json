@@ -1,0 +1,25 @@
+{
+  "model": "Qwen2-VL-7B-Instruct",
+  "hardware": "NVIDIA A30 SM80 24GB",
+  "dtype": "fp16",
+  "vllm_version": "0.17.1",
+  "image_size": "336x336",
+  "ttft_ms": {
+    "p50": 29.5,
+    "p95": 30.4,
+    "p99": 30.4,
+    "n": 20
+  },
+  "decode_throughput": {
+    "batch": 8,
+    "max_tokens": 128,
+    "avg_tok_s": 400.6,
+    "runs": [
+      399.0,
+      403.5,
+      402.6,
+      399.7,
+      398.2
+    ]
+  }
+}
