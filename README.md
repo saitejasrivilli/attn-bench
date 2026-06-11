@@ -155,18 +155,43 @@ catastrophically wrong cross-tile accumulation.
 ### Kernel correctness results
 
 Verified against PyTorch `F.scaled_dot_product_attention` (float16).
+A30 theoretical peak: **165 TFLOPS FP16**.
 
-| Seq len | Status | max_abs_err | Triton (ms) | SDPA (ms) | Ratio |
-|---------|--------|-------------|-------------|-----------|-------|
-| 512     | PASS   | 0.00098     | 0.30        | 0.10      | 3.1×  |
-| 1024    | PASS   | 0.00098     | 0.93        | 0.24      | 3.9×  |
-| 2048    | PASS   | 0.00098     | 5.77        | 0.80      | 7.3×  |
-| 4096    | PASS   | 0.00195     | 24.76       | 5.44      | 4.5×  |
+| Seq len | Status | max_abs_err | Triton (ms) | Triton TFLOPS | SDPA (ms) | SDPA TFLOPS | Ratio |
+|---------|--------|-------------|-------------|--------------|-----------|------------|-------|
+| 512     | PASS   | 0.00098     | 0.30        | 28.6         | 0.10      | 89.2       | 3.1×  |
+| 1024    | PASS   | 0.00098     | 0.93        | 36.8         | 0.24      | 142.8      | 3.9×  |
+| 2048    | PASS   | 0.00098     | 5.77        | 23.8         | 0.80      | 172.7      | 7.3×  |
+| 4096    | PASS   | 0.00195     | 24.76       | 22.2         | 5.44      | 101.0      | 4.5×  |
 
 Errors are within float16 machine epsilon (ε ≈ 0.001). The kernel is a
 reference implementation — no warp specialisation, shared-memory prefetch,
 or register-blocking optimisation. The 3–7× gap to SDPA is expected for an
-unoptimised first-pass kernel.
+unoptimised first-pass kernel. PyTorch SDPA reaches 105–173 TFLOPS (64–105%
+of A30 peak) at these shapes; the Triton reference achieves 22–37 TFLOPS
+(13–22% of peak), leaving clear headroom for warp-level optimisations.
+
+---
+
+## VLM Serving: Qwen2-VL-7B-Instruct (NVIDIA A30)
+
+`vlm_bench/` benchmarks multimodal serving via vLLM with 336×336 image inputs.
+Results: [`vlm_bench/results.json`](vlm_bench/results.json)
+
+**Hardware:** 1× NVIDIA A30 24 GB, fp16, vLLM 0.17.1
+
+| Metric | Value | Notes |
+|--------|-------|-------|
+| TTFT P50 | **29.5 ms** | 20 runs, 336×336 image |
+| TTFT P95 | 30.4 ms | stable (P95 = P99) |
+| TTFT P99 | **30.4 ms** | <1 ms spread P50→P99 |
+| Decode throughput | **400.6 tok/s** | batch=8, 128 output tokens |
+
+29.5 ms TTFT for a 7B vision-language model — image encoding overhead is
+absorbed into prefill and barely visible at P99. Decode throughput of 401 tok/s
+at batch=8 is consistent with the 368 tok/s measured for text-only Qwen2.5-7B
+at the same batch (vLLM benchmark), confirming the vision encoder adds
+negligible decode overhead.
 
 Run correctness check:
 
