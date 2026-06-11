@@ -1,0 +1,33 @@
+{
+  "paged_attention": {
+    "n_requests": 1000,
+    "mean_seq_len": 523,
+    "naive_kv_cache_gb": 1000.0,
+    "paged_kv_cache_gb": 259.38,
+    "memory_savings_pct": 74.1,
+    "naive_fragmentation_pct": 74.4,
+    "paged_fragmentation_pct": 1.4,
+    "naive_concurrent_capacity": 15,
+    "paged_concurrent_capacity": 58,
+    "capacity_multiplier": 3.87
+  },
+  "continuous_batching": {
+    "model": "Mistral-7B-Instruct-v0.2",
+    "hardware": "NVIDIA A30 24GB  (single GPU)",
+    "n_prompts": 40,
+    "max_output_tokens": 200,
+    "continuous_batching": {
+      "throughput_tok_per_s": 967.8,
+      "ttft_ms": 26.5,
+      "p50_latency_ms": 3907.6,
+      "p99_latency_ms": 3917.8
+    },
+    "static_batching": {
+      "batch_size": 4,
+      "throughput_tok_per_s": 202.8,
+      "p99_latency_ms": 3947.7
+    },
+    "speedup_tps": 4.77,
+    "p99_reduction_pct": 0.8
+  }
+}
