@@ -117,11 +117,21 @@ the full burst rather than idling at batch boundaries.
 
 ---
 
-### Tensor-Parallel Scaling (results pending)
+### Tensor-Parallel Scaling
 
 `benchmark/multi_gpu_serving.py` benchmarks TP=1/2/3 on 4×A30 (PCIe, ~16 GB/s inter-GPU).
-Results will be updated in `results/tensor_parallel.json` once the multi-GPU
-NCCL benchmark completes on the shared cluster.
+
+All TP runs (5 attempts) failed at vLLM engine initialization — vLLM v0.17.1 with
+`tensor_parallel_size≥2` on this PCIe-connected A30 cluster exits with
+`EngineCore_DP0: RuntimeError: Engine core initialization failed`.
+Root cause: NCCL collective timeout during multi-process handshake over PCIe fabric
+(~16 GB/s inter-GPU bandwidth, versus NVLink at 600 GB/s).
+
+**Results not available.** To re-run when NVLink-connected GPUs are accessible:
+
+```bash
+python run_real_benchmarks.py  # writes results/tensor_parallel.json
+```
 
 ---
 
